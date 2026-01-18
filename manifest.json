@@ -1,0 +1,11 @@
+{
+  "domain": "nissan_connect",
+  "name": "Nissan Connect",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://www.home-assistant.io/integrations/nissan_connect",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling",
+  "requirements": ["aiohttp"],
+  "version": "1.0.0"
+}
