@@ -50,8 +50,9 @@ class NissanConnectApi:
             headers.update(additional_headers)
 
         try:
+            timeout = aiohttp.ClientTimeout(total=60)  # 1 minute timeout
             if method.upper() == 'GET':
-                async with session.get(endpoint, headers=headers, allow_redirects=allow_redirects) as response:
+                async with session.get(endpoint, headers=headers, allow_redirects=allow_redirects, timeout=timeout) as response:
                     status_code = response.status
                     try:
                         json_data = await response.json()
@@ -68,7 +69,7 @@ class NissanConnectApi:
                     data = urllib.parse.urlencode(params)
                 else:
                     data = json.dumps(params) if params else None
-                async with session.post(endpoint, headers=headers, data=data) as response:
+                async with session.post(endpoint, headers=headers, data=data, timeout=timeout) as response:
                     status_code = response.status
                     try:
                         json_data = await response.json()
@@ -122,7 +123,7 @@ class NissanConnectApi:
 
             # Step 2: Submit username/password (with retry for 401 errors)
             _logger.info("Step 2: Authenticating with username/password")
-            retries = 20
+            retries = 5
             while retries > 0:
                 _logger.info(f"Step 2 attempt, retries left: {retries}")
                 response = await self._request(

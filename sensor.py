@@ -11,17 +11,11 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
-from homeassistant.helpers.update_coordinator import (
-    CoordinatorEntity,
-    DataUpdateCoordinator,
-    UpdateFailed,
-)
+from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .api import NissanConnectApi
 
 _LOGGER = logging.getLogger(__name__)
-
-SCAN_INTERVAL = timedelta(seconds=900)  # 15 minutes
 
 
 async def async_setup_entry(
@@ -30,39 +24,7 @@ async def async_setup_entry(
     async_add_entities: AddEntitiesCallback,
 ) -> None:
     """Set up the Nissan Connect sensor platform."""
-    api: NissanConnectApi = hass.data["nissan_connect"][entry.entry_id]
-
-    async def async_update_data() -> Dict[str, Any]:
-        """Fetch data from API."""
-        _LOGGER.info("Starting data update")
-        try:
-            data = {}
-            for vehicle in api.vehicles:
-                _LOGGER.info(f"Fetching battery data for {vehicle['vin']}")
-                battery_data = await api.get_battery_status(
-                    vehicle['vin'], vehicle['can_generation'], vehicle['model_name']
-                )
-                _LOGGER.info(f"Battery data received: {battery_data}")
-                data[vehicle['vin']] = {
-                    'vehicle': vehicle,
-                    'battery': battery_data
-                }
-                _LOGGER.info(f"Got battery data for {vehicle['vin']}")
-            _LOGGER.info("Data update completed successfully")
-            return data
-        except Exception as e:
-            _LOGGER.error(f"Error fetching data: {e}")
-            raise UpdateFailed(f"Error fetching data: {e}")
-
-    coordinator = DataUpdateCoordinator(
-        hass,
-        _LOGGER,
-        name="nissan_connect",
-        update_method=async_update_data,
-        update_interval=SCAN_INTERVAL,
-    )
-
-    await coordinator.async_config_entry_first_refresh()
+    coordinator = hass.data["nissan_connect"][entry.entry_id]["coordinator"]
 
     entities = []
     for vin, vehicle_data in coordinator.data.items():
