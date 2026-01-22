@@ -257,13 +257,14 @@ def main():
     """Main function to demonstrate vehicle information retrieval."""
     # Create session with debug enabled
     session = NissanConnectSession(debug=True)
-
+    user=input("Username: ")
+    passw=input("Password: ")
     try:
         # Login with provided credentials
         print("Authenticating with NissanConnect...")
         vehicle = session.login(
-            username="xxxxxxxxx@gmail.com",
-            password="xxxxxxxxxxxx"
+            username=user,
+            password=passw
         )
 
         if not vehicle:
