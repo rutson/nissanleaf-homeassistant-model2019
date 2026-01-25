@@ -1,6 +1,6 @@
 """Sensor platform for Nissan Connect integration."""
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from homeassistant.components.sensor import (
@@ -13,9 +13,25 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .api import NissanConnectApi
-
 _LOGGER = logging.getLogger(__name__)
+
+DOMAIN = "nissan_connect"
+
+# Explicit mapping: sensor name -> Nissan API attribute (camelCase)
+NISSAN_ATTR_MAP = {
+    "battery_level": "batteryLevel",
+    "range_hvac_off": "rangeHvacOff",
+    "range_hvac_on": "rangeHvacOn",
+    "battery_bar_level": "batteryBarLevel",
+    "charge_power": "chargePower",
+    "plug_status": "plugStatus",
+    "charge_status": "chargeStatus",
+    "plugStatusDetail": "plugStatusDetail",
+    "timeRequiredToFullSlow": "timeRequiredToFullSlow",
+    "timeRequiredToFullNormal": "timeRequiredToFullNormal",
+    "timeRequiredToFullFast": "timeRequiredToFullFast",
+    "batteryCapacity": "batteryCapacity",
+}
 
 
 async def async_setup_entry(
@@ -23,53 +39,36 @@ async def async_setup_entry(
     entry: ConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Set up the Nissan Connect sensor platform."""
-    coordinator = hass.data["nissan_connect"][entry.entry_id]["coordinator"]
+    coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
 
     entities = []
-    for vin, vehicle_data in coordinator.data.items():
-        vehicle = vehicle_data['vehicle']
-        battery = vehicle_data['battery']
 
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "battery_level", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "range_hvac_off", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "battery_bar_level", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "range_hvac_on", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "charge_power", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "plug_status", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "charge_status", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "lastUpdateTime", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "plugStatusDetail", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "timeRequiredToFullSlow", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "timeRequiredToFullNormal", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "timeRequiredToFullFast", vehicle, battery)
-        )
-        entities.append(
-            NissanConnectBatterySensor(coordinator, vin, "batteryCapacity", vehicle, battery)
-        )
+    for vin, vehicle_data in (coordinator.data or {}).items():
+        vehicle = vehicle_data.get("vehicle", {})
+
+        for sensor_type in [
+            "battery_level",
+            "range_hvac_off",
+            "range_hvac_on",
+            "battery_bar_level",
+            "charge_power",
+            "plug_status",
+            "charge_status",
+            "plugStatusDetail",
+            "timeRequiredToFullSlow",
+            "timeRequiredToFullNormal",
+            "timeRequiredToFullFast",
+            "batteryCapacity",
+            "lastUpdateTime",
+        ]:
+            entities.append(
+                NissanConnectBatterySensor(
+                    coordinator,
+                    vin,
+                    sensor_type,
+                    vehicle,
+                )
+            )
 
     async_add_entities(entities)
 
@@ -77,130 +76,87 @@ async def async_setup_entry(
 class NissanConnectBatterySensor(CoordinatorEntity, SensorEntity):
     """Representation of a Nissan Connect battery sensor."""
 
-    def __init__(self, coordinator, vin, sensor_type, vehicle, battery_data):
-        """Initialize the sensor."""
+    def __init__(self, coordinator, vin, sensor_type, vehicle):
         super().__init__(coordinator)
+
         self._vin = vin
         self._sensor_type = sensor_type
         self._vehicle = vehicle
-        self._battery_data = battery_data
+        self._last_value: Optional[Any] = None
 
-        self._attr_name = f"{vehicle['nickname']} {sensor_type.replace('_', ' ').title()}"
+        name = vehicle.get("nickname") or vin
+        self._attr_name = f"{name} {sensor_type.replace('_', ' ').title()}"
         self._attr_unique_id = f"{vin}_{sensor_type}"
+
         self._attr_device_info = {
-            "identifiers": {(coordinator.config_entry.domain, vin)},
-            "name": vehicle['nickname'],
+            "identifiers": {(DOMAIN, vin)},
             "manufacturer": "Nissan",
-            "model": vehicle['model_name'],
+            "model": vehicle.get("model_name"),
+            "name": name,
         }
 
-        if sensor_type == "battery_level":
-            self._attr_device_class = SensorDeviceClass.BATTERY
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_unit_of_measurement = "%"
-            self._attr_native_unit_of_measurement = "%"
-        elif sensor_type == "range_hvac_off":
-            self._attr_device_class = SensorDeviceClass.DISTANCE
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_unit_of_measurement = "km"
-            self._attr_native_unit_of_measurement = "km"
-        elif sensor_type == "battery_bar_level":
-            self._attr_device_class = None
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_unit_of_measurement = None  # Raw value
-        elif sensor_type == "range_hvac_on":
-            self._attr_device_class = SensorDeviceClass.DISTANCE
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_unit_of_measurement = "km"
-            self._attr_native_unit_of_measurement = "km"
-        elif sensor_type == "charge_power":
-            self._attr_device_class = SensorDeviceClass.POWER
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_unit_of_measurement = "kW"
-            self._attr_native_unit_of_measurement = "kW"
-        elif sensor_type == "plug_status":
-            self._attr_device_class = None
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_unit_of_measurement = None
-        elif sensor_type == "charge_status":
-            self._attr_device_class = None
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_unit_of_measurement = None
-        elif sensor_type == "lastUpdateTime":
-            self._attr_device_class = SensorDeviceClass.TIMESTAMP
-            self._attr_state_class = None
-            self._attr_unit_of_measurement = None
-        elif sensor_type == "plugStatusDetail":
-            self._attr_device_class = None
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_unit_of_measurement = None
-        elif sensor_type == "timeRequiredToFullSlow":
-            self._attr_device_class = SensorDeviceClass.DURATION
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_unit_of_measurement = "min"
-            self._attr_native_unit_of_measurement = "min"
-        elif sensor_type == "timeRequiredToFullNormal":
-            self._attr_device_class = SensorDeviceClass.DURATION
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_unit_of_measurement = "min"
-            self._attr_native_unit_of_measurement = "min"
-        elif sensor_type == "timeRequiredToFullFast":
-            self._attr_device_class = SensorDeviceClass.DURATION
-            self._attr_state_class = SensorStateClass.MEASUREMENT
-            self._attr_unit_of_measurement = "min"
-            self._attr_native_unit_of_measurement = "min"
-        elif sensor_type == "batteryCapacity":
-            self._attr_device_class = SensorDeviceClass.ENERGY
-            self._attr_state_class = SensorStateClass.TOTAL
-            self._attr_unit_of_measurement = "kWh"
-            self._attr_native_unit_of_measurement = "kWh"
-        
+        SENSOR_META = {
+            "battery_level": (SensorDeviceClass.BATTERY, "%", SensorStateClass.MEASUREMENT),
+            "range_hvac_off": (SensorDeviceClass.DISTANCE, "km", SensorStateClass.MEASUREMENT),
+            "range_hvac_on": (SensorDeviceClass.DISTANCE, "km", SensorStateClass.MEASUREMENT),
+            "battery_bar_level": (None, None, SensorStateClass.MEASUREMENT),
+            "charge_power": (SensorDeviceClass.POWER, "kW", SensorStateClass.MEASUREMENT),
+            "plug_status": (None, None, None),
+            "charge_status": (None, None, None),
+            "plugStatusDetail": (None, None, None),
+            "timeRequiredToFullSlow": (SensorDeviceClass.DURATION, "min", SensorStateClass.MEASUREMENT),
+            "timeRequiredToFullNormal": (SensorDeviceClass.DURATION, "min", SensorStateClass.MEASUREMENT),
+            "timeRequiredToFullFast": (SensorDeviceClass.DURATION, "min", SensorStateClass.MEASUREMENT),
+            "batteryCapacity": (SensorDeviceClass.ENERGY, "kWh", SensorStateClass.TOTAL),
+            "lastUpdateTime": (SensorDeviceClass.TIMESTAMP, None, None),
+        }
+
+        device_class, unit, state_class = SENSOR_META[sensor_type]
+        self._attr_device_class = device_class
+        self._attr_native_unit_of_measurement = unit
+        self._attr_state_class = state_class
 
     @property
-    def native_value(self) -> Optional[float]:
-        """Return the state of the sensor."""
-        battery = self.coordinator.data[self._vin]['battery']
-        attributes = battery.get('data', {}).get('attributes', {})
-        if self._sensor_type == "battery_level":
-            return attributes.get('batteryLevel')
-        elif self._sensor_type == "range_hvac_off":
-            return attributes.get('rangeHvacOff')
-        elif self._sensor_type == "battery_bar_level":
-            return attributes.get('batteryBarLevel')
-        elif self._sensor_type == "range_hvac_on":
-            return attributes.get('rangeHvacOn')
-        elif self._sensor_type == "charge_power":
-            return attributes.get('chargePower')
-        elif self._sensor_type == "plug_status":
-            return attributes.get('plugStatus')
-        elif self._sensor_type == "charge_status":
-            return attributes.get('chargeStatus')
-        elif self._sensor_type == "lastUpdateTime":
-            time_str = attributes.get('lastUpdateTime')
-            if time_str:
-                # Parse ISO format string to datetime, handling 'Z' as UTC
-                return datetime.fromisoformat(time_str.replace('Z', '+00:00'))
-            return None
-        elif self._sensor_type == "plugStatusDetail":
-            return attributes.get('plugStatusDetail')
-        elif self._sensor_type == "timeRequiredToFullSlow":
-            return attributes.get('timeRequiredToFullSlow')
-        elif self._sensor_type == "timeRequiredToFullNormal":
-            return attributes.get('timeRequiredToFullNormal')
-        elif self._sensor_type == "timeRequiredToFullFast":
-            return attributes.get('timeRequiredToFullFast')
-        elif self._sensor_type == "batteryCapacity":
-            return attributes.get('batteryCapacity')
-        return None
+    def native_value(self) -> Optional[Any]:
+        data = self.coordinator.data or {}
+        vehicle_data = data.get(self._vin, {})
+        battery = vehicle_data.get("battery", {})
+        attributes = battery.get("data", {}).get("attributes", {})
+
+        value: Optional[Any] = None
+
+        if self._sensor_type == "lastUpdateTime":
+            ts = attributes.get("lastUpdateTime")
+            if ts:
+                value = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        else:
+            attr_name = NISSAN_ATTR_MAP.get(self._sensor_type)
+            if attr_name:
+                value = attributes.get(attr_name)
+
+        if value is not None:
+            self._last_value = value
+            return value
+
+        # Keep last known value if Nissan returns cached / empty data
+        return self._last_value
+
+    @property
+    def available(self) -> bool:
+        # Sensor remains available as long as VIN exists
+        return self._vin in (self.coordinator.data or {})
 
     @property
     def extra_state_attributes(self) -> Dict[str, Any]:
-        """Return additional attributes."""
-        battery = self.coordinator.data[self._vin]['battery']
-        attributes = battery.get('data', {}).get('attributes', {})
+        data = self.coordinator.data or {}
+        vehicle_data = data.get(self._vin, {})
+        battery = vehicle_data.get("battery", {})
+        attributes = battery.get("data", {}).get("attributes", {})
+
         return {
             "vin": self._vin,
-            "charge_power": attributes.get('chargePower'),
-            "charge_status": attributes.get('chargeStatus'),
-            "plug_status": attributes.get('plugStatus'),
+            "nissan_cache_age_s": battery.get("cache_age"),
+            "nissan_status": battery.get("status"),
+            "charge_status": attributes.get("chargeStatus"),
+            "plug_status": attributes.get("plugStatus"),
         }
