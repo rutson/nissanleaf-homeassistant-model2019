@@ -236,8 +236,15 @@ class NissanConnectApi:
                     f"v1/cars/{vin}/battery-status"
                 )
 
+            # Try to bypass upstream caching by requesting fresh data
+            additional_headers = {
+                "Accept": "application/json",
+                "Cache-Control": "no-cache, no-store, max-age=0",
+                "Pragma": "no-cache",
+            }
+
             response = await self.request_with_retry(
-                session, endpoint, method="GET"
+                session, endpoint, method="GET", additional_headers=additional_headers
             )
             body = response.get("body", {})
 

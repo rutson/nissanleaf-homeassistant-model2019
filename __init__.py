@@ -62,6 +62,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # We do NOT block entity creation on first refresh
     await coordinator.async_refresh()
 
+    # Keep fixed scan interval; requests should ask for fresh data (no caching)
+
     hass.data[DOMAIN][entry.entry_id] = {
         "api": api,
         "vehicles": api.vehicles,
