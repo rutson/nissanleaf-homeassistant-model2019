@@ -42,9 +42,9 @@ class ConfigFlow(config_entries.ConfigFlow, domain="nissan_connect"):
                 username=user_input["username"],
                 password=user_input["password"],
             )
-            _logger.info("Starting API login in config flow")
+            _LOGGER.info("Starting API login in config flow")
             await api.login()
-            _logger.info("API login successful")
+            _LOGGER.info("API login successful")
         except Exception as e:
             _LOGGER.error("Authentication failed: %s", e)
             errors["base"] = "invalid_auth"
